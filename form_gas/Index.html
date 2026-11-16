@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html>
+<head>
+<base target="_top">
+<meta charset="utf-8">
+<style>
+  :root { --fg: #1d1d1f; --muted: #5f6368; --line: #d9dce1; --accent: #1a56db; --bg: #ffffff; --soft: #f4f6f9; --err: #b42318; }
+  @media (prefers-color-scheme: dark) {
+    :root { --fg: #ececf1; --muted: #a2a6ad; --line: #3a3d44; --accent: #6b9bff; --bg: #17181b; --soft: #212328; --err: #ff8a80; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--fg); font: 16px/1.55 system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans", "Noto Sans Devanagari", sans-serif; }
+  main { max-width: 640px; margin: 0 auto; padding: 24px 16px 48px; }
+  h1 { font-size: 1.35rem; margin: 0 0 12px; }
+  p { margin: 0 0 12px; }
+  .muted { color: var(--muted); font-size: 0.92rem; }
+  fieldset { border: 1px solid var(--line); border-radius: 10px; padding: 10px 14px; margin: 0 0 14px; }
+  legend { font-size: 0.92rem; color: var(--muted); padding: 0 4px; }
+  label.opt { display: inline-flex; align-items: center; gap: 6px; margin: 4px 14px 4px 0; }
+  button { font: inherit; border-radius: 10px; padding: 12px 18px; border: 1px solid var(--line); background: var(--soft); color: var(--fg); cursor: pointer; }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  button:disabled { opacity: 0.55; cursor: default; }
+  .row { display: flex; gap: 10px; flex-wrap: wrap; }
+  .row button { flex: 1 1 140px; }
+  .src { font-size: 1.55rem; line-height: 1.5; padding: 14px 16px; margin: 8px 0 16px; background: var(--soft); border-radius: 12px; }
+  input[type=text] { width: 100%; font: inherit; font-size: 1.1rem; padding: 12px 14px; border-radius: 10px; border: 1px solid var(--line); background: var(--bg); color: var(--fg); margin-bottom: 8px; }
+  .err { color: var(--err); min-height: 1.5em; font-size: 0.95rem; }
+  .hidden { display: none; }
+</style>
+</head>
+<body>
+<main>
+  <section id="consent" class="hidden">
+    <h1>Hinglish search queries: help build a test set</h1>
+    <p>This is a student research project on search in Hinglish, meaning Hindi typed in English letters ("mujhe sasta phone chahiye").</p>
+    <p><b>What you do.</b> You see one question at a time. Type it the way you would type it to a friend or in a search bar. There is no right or wrong spelling. Type the way you normally do. You can skip any question and stop whenever you like.</p>
+    <p><b>What is saved.</b> Only what you type, which question it was for, and timestamps. Your browser gets a random id so you never see the same question twice. We do not collect your name, email, phone number, or IP address. The two optional questions below are not linked to who you are.</p>
+    <p><b>Please do not type</b> names, phone numbers, or anything personal into the answers.</p>
+    <p><b>How it will be used.</b> Your answers will be published as part of a free public dataset for research, under the Creative Commons Attribution-ShareAlike 4.0 licence (CC BY-SA 4.0), the same licence as the Wikipedia text the questions come from. Answers are anonymous, so they cannot be removed one by one after publication.</p>
+    <p>By pressing "I agree, start" you confirm you are 18 or older and agree to this.</p>
+    <fieldset>
+      <legend>Optional: how often do you type Hindi in English letters?</legend>
+      <label class="opt"><input type="radio" name="freq" value="Daily">Daily</label>
+      <label class="opt"><input type="radio" name="freq" value="Sometimes">Sometimes</label>
+      <label class="opt"><input type="radio" name="freq" value="Rarely">Rarely</label>
+      <label class="opt"><input type="radio" name="freq" value="Never">Never</label>
+    </fieldset>
+    <fieldset>
+      <legend>Optional: can you read Hindi in Devanagari script?</legend>
+      <label class="opt"><input type="radio" name="read" value="Easily">Easily</label>
+      <label class="opt"><input type="radio" name="read" value="Slowly">Slowly</label>
+      <label class="opt"><input type="radio" name="read" value="Not really">Not really</label>
+    </fieldset>
+    <button id="start" class="primary">I agree, start</button>
+  </section>
+
+  <section id="task" class="hidden">
+    <p class="muted" id="progress"></p>
+    <p id="instr"></p>
+    <div class="src" id="src"></div>
+    <input type="text" id="box" placeholder="Type here in English letters" maxlength="300"
+           autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" enterkeyhint="send">
+    <div class="err" id="err"></div>
+    <div class="row">
+      <button id="submit" class="primary">Submit</button>
+      <button id="skip">Skip this one</button>
+    </div>
+  </section>
+
+  <section id="done" class="hidden">
+    <h1>That is everything for now. Thank you for helping!</h1>
+  </section>
+
+  <p id="loading" class="muted">Loading...</p>
+</main>
+
+<script>
+  var KEY = 'hinglish_form_v1';
+  var mem = {};
+  var INSTR_HI = '<b>Type this the way you would type it to a friend or in a search bar.</b> Use English letters. There is no right spelling.';
+  var INSTR_EN = '<b>How would you type this in Hinglish, to a friend or in a search bar?</b> Use English letters and mix Hindi and English the way you normally do.';
+  var cur = null;
+
+  function load() { try { return JSON.parse(localStorage.getItem(KEY)) || {}; } catch (e) { return mem; } }
+  function save(st) { try { localStorage.setItem(KEY, JSON.stringify(st)); } catch (e) { mem = st; } }
+  function newId() {
+    var a = new Uint8Array(16); crypto.getRandomValues(a);
+    return Array.prototype.map.call(a, function (b) { return ('0' + b.toString(16)).slice(-2); }).join('');
+  }
+  function $(id) { return document.getElementById(id); }
+  function show(id) {
+    ['consent', 'task', 'done', 'loading'].forEach(function (s) { $(s).classList.toggle('hidden', s !== id); });
+  }
+  function busy(on) { $('submit').disabled = on; $('skip').disabled = on; $('start').disabled = on; }
+  function picked(name) { var el = document.querySelector('input[name=' + name + ']:checked'); return el ? el.value : ''; }
+
+  var st = load();
+  if (!st.anon) { st.anon = newId(); save(st); }
+
+  function fail(e) { busy(false); $('err').textContent = 'Something went wrong. Please try again.'; show(cur ? 'task' : 'consent'); }
+
+  function render(r) {
+    busy(false);
+    if (r.error) { $('err').textContent = r.error; return; }
+    if (r.needConsent) { st.consented = false; save(st); show('consent'); return; }
+    $('progress').textContent = 'Done so far: ' + r.done + '. Stop whenever you like, thank you!';
+    if (r.finished) { show('done'); return; }
+    cur = { id: r.source.id, shownAt: r.shownAt };
+    $('instr').innerHTML = r.source.lang === 'hi' ? INSTR_HI : INSTR_EN;
+    $('src').textContent = r.source.text;
+    $('src').setAttribute('lang', r.source.lang);
+    $('box').value = '';
+    $('err').textContent = '';
+    show('task');
+    $('box').focus();
+  }
+
+  function call(fn) {
+    busy(true);
+    var run = google.script.run.withSuccessHandler(render).withFailureHandler(fail);
+    fn(run);
+  }
+
+  $('start').addEventListener('click', function () {
+    call(function (run) { run.startSession(st.anon, picked('freq'), picked('read')); });
+    st.consented = true; save(st);
+  });
+  function submit() {
+    var t = $('box').value;
+    if (!t.trim()) { $('err').textContent = 'Type something, or press Skip.'; return; }
+    if (/[ऀ-ॿ]/.test(t)) { $('err').textContent = 'Please use English letters (a to z) only.'; return; }
+    call(function (run) { run.submitRewrite(st.anon, cur.id, cur.shownAt, t); });
+  }
+  $('submit').addEventListener('click', submit);
+  $('box').addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); submit(); } });
+  $('skip').addEventListener('click', function () {
+    call(function (run) { run.skipQuery(st.anon, cur.id, cur.shownAt); });
+  });
+
+  if (st.consented) { call(function (run) { run.getNext(st.anon); }); } else { show('consent'); }
+</script>
+</body>
+</html>

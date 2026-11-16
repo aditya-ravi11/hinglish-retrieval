@@ -1,0 +1,3 @@
+# Provenance notes per anonymous annotator id. Read by scripts/import_sheet.py
+# (as "provenance") and reported in the dataset card. Format: <anon_id>  # note
+554c26aa7359eb4ea1ddd01b2717abc7  # 2026-11-16: pooled id. 218 rewrites from 10-15 people taking turns on one shared device (reported by the project owner); the split by person cannot be recovered. Median 3.3 s from question shown to answer submitted. 104 rewrites carried a leading "[synthetic]" label, origin not established, stripped at import
