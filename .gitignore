@@ -1,0 +1,15 @@
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+# raw downloads and caches are rebuilt by scripts
+data/raw/
+data/cache/
+# collected human rewrites stay private until release is approved
+form/collected/
+form/_existing/
+data/collected/
+*.egg-info/
+# clasp project binding (script id) stays local
+.clasp.json
+form_gas/.clasp.json
