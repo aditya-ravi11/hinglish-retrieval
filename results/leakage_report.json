@@ -1,0 +1,14 @@
+{
+ "eval_texts": 1518,
+ "train_texts": 359,
+ "judged_passages": 12004,
+ "seed_passages": 0,
+ "exact_overlaps": [],
+ "n_exact": 0,
+ "near_duplicates_jaccard_0.8": [],
+ "n_near": 0,
+ "n_review_0.6_to_0.8": 0,
+ "review_0.6_to_0.8": [],
+ "seed_passage_overlaps": [],
+ "n_seed_overlaps": 0
+}
