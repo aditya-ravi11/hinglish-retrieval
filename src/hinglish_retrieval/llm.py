@@ -58,7 +58,7 @@ def default_batch_size(model) -> int:
     if model.device.type != "cuda":
         return 2
     gb = torch.cuda.get_device_properties(0).total_memory / 2**30
-    return 96 if gb >= 70 else 48 if gb >= 40 else 16 if gb >= 22 else 4
+    return 192 if gb >= 70 else 96 if gb >= 40 else 24 if gb >= 22 else 4
 
 
 def chat_generate(

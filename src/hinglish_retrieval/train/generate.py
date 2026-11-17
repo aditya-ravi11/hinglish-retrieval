@@ -1,6 +1,6 @@
 """Training data: synthetic Hindi questions from passages, with Hinglish versions.
 
-    python -m hinglish_retrieval.train.generate [--n 20000] [--llm Qwen/Qwen3-8B]
+    python -m hinglish_retrieval.train.generate [--n 10000] [--llm Qwen/Qwen3-8B]
 
 Seeds are passages of the full MIRACL Hindi corpus that are NOT in the pooled
 evaluation corpus, so no seed was ever judged for an evaluation query, and that
@@ -194,7 +194,7 @@ def pool_items(texts_by_id: dict[str, str]) -> list[dict]:
 
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--n", type=int, default=20000, help="target number of synthetic items")
+    ap.add_argument("--n", type=int, default=10000, help="target number of synthetic items")
     ap.add_argument("--llm", default="Qwen/Qwen3-8B")
     ap.add_argument("--batch-size", type=int)
     ap.add_argument("--seed", type=int, default=13)

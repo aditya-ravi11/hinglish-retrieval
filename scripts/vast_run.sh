@@ -16,7 +16,7 @@
 #   test      the full test table with the picked model
 #   bundle    out/hinglish-run-<time>.tgz to copy back to your own machine
 #
-# Settings (environment variables): N (training items, default 20000),
+# Settings (environment variables): N (training items, default 10000),
 # LLM (generator, default Qwen/Qwen3-8B), HR_BT_LLM (back-transliteration,
 # default Qwen/Qwen3-4B), BUNDLE_CACHE=1 to also pack the corpus embeddings
 # (about 5 GB) so the table can be rerun later without re-encoding.
@@ -25,7 +25,7 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 ROOT=$(pwd)
 PY=${PY:-$ROOT/.venv/bin/python}
-N=${N:-20000}
+N=${N:-10000}
 LLM=${LLM:-Qwen/Qwen3-8B}
 STAMP=$(date +%Y%m%d-%H%M%S)
 mkdir -p logs out
