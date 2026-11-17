@@ -94,4 +94,4 @@ Training data for the fine-tuned model ([data/train/](data/train/)): 9,739 synth
 
 ## Licences
 
-See [LICENCES.md](LICENCES.md).
+The code is MIT-licensed ([LICENSE](LICENSE)). The data, the training data and the models keep their own licences: see [LICENCES.md](LICENCES.md).
