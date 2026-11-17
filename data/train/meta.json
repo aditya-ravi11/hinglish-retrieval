@@ -1,0 +1,15 @@
+{
+ "generated_at": "2026-11-17T14:55:27+00:00",
+ "llm": "Qwen/Qwen3-8B",
+ "seed": 13,
+ "target_n": 10000,
+ "seeds_tried": 11510,
+ "parse_failures": 1707,
+ "synth_items": 9739,
+ "pool_items": 327,
+ "dropped_as_near_eval": {
+  "synth": 0,
+  "pool": 0
+ },
+ "hinglish_per_item": "2 from the LLM (when both pass the checks) + 1 rule-based (noise.py); pool: 3 rule-based"
+}

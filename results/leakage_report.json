@@ -1,15 +1,65 @@
 {
  "eval_texts": 1300,
  "dakshina_texts": 19798,
- "train_texts": 359,
+ "train_texts": 39738,
  "judged_passages": 12004,
- "seed_passages": 0,
+ "seed_passages": 9739,
  "exact_overlaps": [],
  "n_exact": 0,
  "near_duplicates_jaccard_0.8": [],
  "n_near": 0,
- "n_review_0.6_to_0.8": 0,
- "review_0.6_to_0.8": [],
+ "n_review_0.6_to_0.8": 7,
+ "review_0.6_to_0.8": [
+  [
+   "synth:syn-14358#1:native",
+   "hi-train-700282#0",
+   0.6,
+   "गिलोटिन का आविष्कार किसने किया था",
+   "COVID वैक्सीन का आविष्कार किसने किया था?"
+  ],
+  [
+   "synth:syn-14358#1:native",
+   "hi-train-58234#0",
+   0.641,
+   "गिलोटिन का आविष्कार किसने किया था",
+   "बल्ब का आविष्कार किसने किया था?"
+  ],
+  [
+   "synth:syn-14358#1:native",
+   "hi-train-756920#0",
+   0.619,
+   "गिलोटिन का आविष्कार किसने किया था",
+   "जेट इन्जन का आविष्कार किसने किया था?"
+  ],
+  [
+   "synth:syn-14358#1:hing2",
+   "hi-train-700282#0",
+   0.6,
+   "gilotin ka avishkar kisane kiya tha",
+   "COVID वैक्सीन का आविष्कार किसने किया था?"
+  ],
+  [
+   "synth:syn-14358#1:hing2",
+   "hi-train-58234#0",
+   0.641,
+   "gilotin ka avishkar kisane kiya tha",
+   "बल्ब का आविष्कार किसने किया था?"
+  ],
+  [
+   "synth:syn-14358#1:hing2",
+   "hi-train-756920#0",
+   0.619,
+   "gilotin ka avishkar kisane kiya tha",
+   "जेट इन्जन का आविष्कार किसने किया था?"
+  ],
+  [
+   "synth:syn-976961#0:native",
+   "hi-train-229609#0",
+   0.6,
+   "आवाँ गार्द का शाब्दिक अर्थ क्या है?",
+   "आर्य शब्द का शाब्दिक अर्थ क्या है?"
+  ]
+ ],
  "seed_passage_overlaps": [],
  "n_seed_overlaps": 0,
  "seeds_containing_dakshina": [],
