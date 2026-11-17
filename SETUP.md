@@ -67,7 +67,7 @@ To recreate the source selection or the pooled corpus from scratch (not needed n
 
 ## 5. Linux GPU machine (Vast.ai)
 
-For a rented Linux GPU. Pick an instance whose driver supports CUDA 13.0 or newer (the CUDA column in the Vast search), with 48 GB of GPU memory (an RTX A6000, L40S or A100; 24 GB works but the generation stage is about three times slower) and 100 GB of disk. Run long jobs inside `tmux` so they survive an SSH disconnect.
+For a rented Linux GPU. Pick an instance with 48 GB of GPU memory (an RTX A6000, L40S or A100; 24 GB works but the generation stage is about three times slower) and 100 GB of disk. Run long jobs inside `tmux` so they survive an SSH disconnect.
 
 The repository is private, so `git clone` asks for your GitHub username and a personal access token with read access to it.
 
@@ -76,7 +76,7 @@ git clone https://github.com/aditya-ravi11/hinglish-retrieval.git
 cd hinglish-retrieval
 ```
 
-Python 3.12 environment. If the image has no `python3.12`, create the venv with `pip install uv && uv venv --seed --python 3.12 .venv` instead of the first line.
+Python 3.12 environment. If the image has no `python3.12`, create the venv with `pip install uv && uv venv --seed --python 3.12 .venv` instead of the first line. The torch line below is for instances whose Max CUDA is 13.0 or newer; if it is 12.6 to 12.9, use the same version built for CUDA 12.6 instead: `.venv/bin/python -m pip install torch==2.14.1 --index-url https://download.pytorch.org/whl/cu126`.
 
 ```
 python3.12 -m venv .venv
