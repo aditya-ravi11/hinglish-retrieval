@@ -2,7 +2,7 @@
 
 A retrieval benchmark for Hindi typed in Latin script (Hinglish), and a small embedding model trained to find the same text whether a query is typed in Devanagari or in Hinglish.
 
-Status: first full results are in (17 November 2026, below). The fine-tuned model is not yet published on Hugging Face. Every number in this file comes from `results/`, which `bash scripts/vast_run.sh` (or `python scripts/reproduce.py`) regenerates.
+Status: first full results are in (17 November 2026, below). The fine-tuned model is published as [adityar101/bhasha-embed-v0-hinglish](https://huggingface.co/adityar101/bhasha-embed-v0-hinglish). Every number in this file comes from `results/`, which `bash scripts/vast_run.sh` (or `python scripts/reproduce.py`) regenerates.
 
 ## The problem
 
