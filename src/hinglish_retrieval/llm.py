@@ -6,6 +6,7 @@ LLM back-transliteration baseline (data/backtranslit.py).
 
 from __future__ import annotations
 
+import gc
 import re
 import time
 from collections.abc import Iterator
@@ -85,8 +86,8 @@ def chat_generate(
     order = sorted(range(len(texts)), key=lambda i: len(texts[i]))  # less padding per batch
     kw = dict(do_sample=True, temperature=0.7, top_p=0.9) if sample else dict(do_sample=False)
 
-    def run(idx: list[int]) -> list[str]:
-        """Answers for one batch; on GPU out-of-memory, halve the batch and retry."""
+    def attempt(idx: list[int]) -> list[str] | None:
+        """Answers for one batch, or None if it ran out of GPU memory."""
         try:
             enc = tok([texts[i] for i in idx], return_tensors="pt", padding=True).to(model.device)
             with torch.no_grad():
@@ -95,11 +96,23 @@ def chat_generate(
         except torch.OutOfMemoryError:
             if len(idx) == 1:
                 raise
-            enc = gen = None
-            torch.cuda.empty_cache()
-            half = len(idx) // 2
-            print(f"  out of GPU memory at batch {len(idx)}: retrying as {half} + {len(idx) - half}", flush=True)
-            return run(idx[:half]) + run(idx[half:])
+            return None
+
+    def run(idx: list[int]) -> list[str]:
+        """Answers for one batch; on GPU out-of-memory, halve the batch and retry.
+
+        The retry happens here, after attempt() has returned: while an except
+        block is running, the exception's traceback keeps the failed batch's
+        tensors (inputs, KV cache) alive, so retrying inside it cannot free them.
+        """
+        out = attempt(idx)
+        if out is not None:
+            return out
+        gc.collect()
+        torch.cuda.empty_cache()
+        half = len(idx) // 2
+        print(f"  out of GPU memory at batch {len(idx)}: retrying as {half} + {len(idx) - half}", flush=True)
+        return run(idx[:half]) + run(idx[half:])
 
     t0 = time.time()
     for s in range(0, len(order), bs):
