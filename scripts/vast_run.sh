@@ -28,6 +28,7 @@ PY=${PY:-$ROOT/.venv/bin/python}
 N=${N:-10000}
 LLM=${LLM:-Qwen/Qwen3-8B}
 STAMP=$(date +%Y%m%d-%H%M%S)
+export PYTORCH_CUDA_ALLOC_CONF=${PYTORCH_CUDA_ALLOC_CONF:-expandable_segments:True}  # less fragmentation
 mkdir -p logs out
 exec > >(tee -a "logs/run-$STAMP.log") 2>&1
 

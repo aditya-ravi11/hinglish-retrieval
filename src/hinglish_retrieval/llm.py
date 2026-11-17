@@ -84,14 +84,27 @@ def chat_generate(
     ]
     order = sorted(range(len(texts)), key=lambda i: len(texts[i]))  # less padding per batch
     kw = dict(do_sample=True, temperature=0.7, top_p=0.9) if sample else dict(do_sample=False)
+
+    def run(idx: list[int]) -> list[str]:
+        """Answers for one batch; on GPU out-of-memory, halve the batch and retry."""
+        try:
+            enc = tok([texts[i] for i in idx], return_tensors="pt", padding=True).to(model.device)
+            with torch.no_grad():
+                gen = model.generate(**enc, max_new_tokens=max_new_tokens, pad_token_id=tok.pad_token_id, **kw)
+            return tok.batch_decode(gen[:, enc["input_ids"].shape[1] :], skip_special_tokens=True)
+        except torch.OutOfMemoryError:
+            if len(idx) == 1:
+                raise
+            enc = gen = None
+            torch.cuda.empty_cache()
+            half = len(idx) // 2
+            print(f"  out of GPU memory at batch {len(idx)}: retrying as {half} + {len(idx) - half}", flush=True)
+            return run(idx[:half]) + run(idx[half:])
+
     t0 = time.time()
     for s in range(0, len(order), bs):
         idx = order[s : s + bs]
-        enc = tok([texts[i] for i in idx], return_tensors="pt", padding=True).to(model.device)
-        with torch.no_grad():
-            gen = model.generate(**enc, max_new_tokens=max_new_tokens, pad_token_id=tok.pad_token_id, **kw)
-        answers = tok.batch_decode(gen[:, enc["input_ids"].shape[1] :], skip_special_tokens=True)
-        for i, a in zip(idx, answers):
+        for i, a in zip(idx, run(idx)):
             yield i, _THINK.sub("", a).strip()
         if progress:
             done = s + len(idx)
