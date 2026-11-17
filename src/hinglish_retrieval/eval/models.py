@@ -6,7 +6,13 @@ loaded weights and writes them into the results file.
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[3]
+MODELS_DIR = ROOT / "models"  # fine-tuned models, git-ignored
+SELECTED = MODELS_DIR / "SELECTED"  # key of the model chosen on the dev split
 
 
 @dataclass(frozen=True)
@@ -46,3 +52,34 @@ DENSE = {
         ModelSpec("bhasha-embed-v0", "AkshitaS/bhasha-embed-v0", "Apache-2.0"),
     ]
 }
+
+# Back-transliteration pipelines: Latin-script queries go through
+# data/backtranslit.py first, then an unchanged retriever.
+BACKTRANSLIT = {"bt-bm25": "bm25", "bt-me5-base": "me5-base", "bt-bge-m3": "bge-m3"}
+
+
+def trained(role: str | None = None) -> dict[str, ModelSpec]:
+    """Fine-tuned models in models/<key>/, written by hinglish_retrieval.train.train.
+
+    role "dev": every trained model, so one can be selected on the dev split.
+    role "test": only the model named in models/SELECTED, so the test split
+    never takes part in model selection.
+    """
+    if not MODELS_DIR.exists():
+        return {}
+    keys = sorted(p.parent.name for p in MODELS_DIR.glob("*/hr_spec.json"))
+    if role == "test":
+        chosen = SELECTED.read_text(encoding="utf-8").strip() if SELECTED.exists() else ""
+        keys = [k for k in keys if k == chosen]
+    out = {}
+    for k in keys:
+        meta = json.loads((MODELS_DIR / k / "hr_spec.json").read_text(encoding="utf-8"))
+        out[k] = ModelSpec(
+            k,
+            str(MODELS_DIR / k),
+            meta["licence"],
+            meta["query_prompt"],
+            meta["doc_prompt"],
+            meta.get("max_len", 512),
+        )
+    return out

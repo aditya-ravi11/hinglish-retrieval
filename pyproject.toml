@@ -1,7 +1,7 @@
 [project]
 name = "hinglish-retrieval"
 version = "0.1.0"
-description = "Human-written Hinglish retrieval benchmark and a small script-invariant embedding model"
+description = "Hinglish (romanized Hindi) retrieval benchmark and a small script-invariant embedding model"
 requires-python = ">=3.12"
 dependencies = [
     "huggingface_hub>=1.0",
@@ -15,8 +15,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-form = ["gradio>=6.0"]
-models = ["torch", "sentence-transformers", "transformers"]
+models = ["torch", "sentence-transformers", "transformers", "accelerate"]
 dev = ["pytest"]
 
 [build-system]
@@ -27,5 +26,5 @@ build-backend = "setuptools.build_meta"
 where = ["src"]
 
 [tool.pytest.ini_options]
-testpaths = ["tests", "form/tests"]
-pythonpath = ["src", "form"]
+testpaths = ["tests"]
+pythonpath = ["src"]

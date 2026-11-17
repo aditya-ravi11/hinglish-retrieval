@@ -1,10 +1,12 @@
-"""Pick the MIRACL queries that annotators will rewrite in Hinglish.
+"""Pick the MIRACL queries used for evaluation, and the training pool.
 
 Roles (fixed seed, written once and committed):
   test     1,000 Hindi queries: all 349 unique MIRACL-hi dev texts + 651 from train
-  dev        150 Hindi queries sampled from train (human dev split, model selection only)
-  test_en    150 English queries sampled from MIRACL-en dev (code-mixed subset)
-  train pool: every remaining MIRACL-hi train query, never shown to annotators
+  dev        150 Hindi queries sampled from train (model selection only)
+  test_en    150 English queries sampled from MIRACL-en dev (planned code-mixed
+             subset; not scored since human collection was dropped)
+  train pool: every remaining MIRACL-hi train query, the only MIRACL queries
+             training may use
 
 Why all of MIRACL-hi dev goes to test: some baselines (bge-m3, multilingual-e5)
 list MIRACL train in their fine-tuning data, so dev-origin queries are the
@@ -94,8 +96,8 @@ def select() -> tuple[list[dict], list[dict]]:
     for q in en_ids:
         add(q, en_dev_t[q], "en", "dev", "test_en")
 
-    # Collection priority: one fixed random order over all sources, so every
-    # role fills at the same rate and the go/no-go gate can run early.
+    # Priority: one fixed random order over all sources. It was the order of the
+    # retired collection form; kept so the committed sources file is reproducible.
     order = list(range(len(sources)))
     rng.shuffle(order)
     for rank, i in enumerate(order):

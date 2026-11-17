@@ -1,3 +1,0 @@
-ceb72dfbfe0bfecdcd257c9bd0bddd02  # 2026-11-13 deployment smoke test of the live form (marked "TEST ...")
-f8a96a38c5afd7e9ecef2bb26675be37  # 2026-11-13 project owner's own session; excluded because the owner knows the hypothesis
-ed252411a2149a8e529988341265fd64  # 2026-11-13 project owner's second browser (confirmed by owner)

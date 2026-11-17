@@ -1,6 +1,8 @@
 # Exact versions used on the original machine (Windows 11, Python 3.12.4), from pip freeze.
 # torch is the CUDA 13.0 build: install it first with
 #   pip install torch==2.14.1 --index-url https://download.pytorch.org/whl/cu130
+# accelerate and psutil were added later for model training (sentence-transformers Trainer).
+accelerate==1.15.0
 annotated-doc==0.0.6
 annotated-types==0.8.0
 anyio==4.16.0
@@ -48,6 +50,7 @@ packaging==26.3
 pandas==3.1.1
 pillow==12.3.0
 pluggy==1.7.0
+psutil==7.2.2
 pyarrow==26.0.1
 pydantic==2.14.3
 pydantic_core==2.50.4

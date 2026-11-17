@@ -1,5 +1,6 @@
 {
- "eval_texts": 1518,
+ "eval_texts": 1300,
+ "dakshina_texts": 19798,
  "train_texts": 359,
  "judged_passages": 12004,
  "seed_passages": 0,
@@ -10,5 +11,7 @@
  "n_review_0.6_to_0.8": 0,
  "review_0.6_to_0.8": [],
  "seed_passage_overlaps": [],
- "n_seed_overlaps": 0
+ "n_seed_overlaps": 0,
+ "seeds_containing_dakshina": [],
+ "n_seed_dakshina": 0
 }

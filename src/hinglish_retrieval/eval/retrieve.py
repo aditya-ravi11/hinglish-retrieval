@@ -43,14 +43,18 @@ class BM25:
 
 
 class Dense:
-    def __init__(self, spec: ModelSpec, device: str = "cuda"):
+    def __init__(self, spec: ModelSpec, device: str | None = None):
         import torch
         from sentence_transformers import SentenceTransformer
 
         self.spec = spec
-        self.device = device
+        self.device = device or ("cuda" if torch.cuda.is_available() else "cpu")
+        device = self.device
         self.model = SentenceTransformer(
-            spec.hf_id, device=device, model_kwargs={"torch_dtype": torch.bfloat16}
+            spec.hf_id,
+            device=device,
+            # bf16 on GPU as before; CPU (tests only) is much faster in fp32
+            model_kwargs={"torch_dtype": torch.bfloat16 if device == "cuda" else torch.float32},
         )
         self.model.max_seq_length = spec.max_len
         self.n_params = sum(p.numel() for p in self.model.parameters())

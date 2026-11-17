@@ -4,13 +4,17 @@ Two modes:
 
   python scripts/check_leakage.py --full
       Needs the local data. Loads every evaluation text (MIRACL source queries
-      for the test, dev and English roles, plus every collected human rewrite)
-      and every training text (MIRACL-hi train pool, synthetic native queries
-      and their Hinglish rewrites in data/train/*.jsonl). Checks:
-        1. no exact match after normalisation
-        2. no char-5-gram Jaccard >= 0.8 between normalised strings
+      of all roles, and the ~20,000 Dakshina sentences, native and
+      human-romanized) and every training text (MIRACL-hi train pool,
+      synthetic native queries and their Hinglish versions in
+      data/train/*.jsonl). Checks:
+        1. no exact match after normalisation (MIRACL and Dakshina)
+        2. no char-5-gram Jaccard >= 0.8 between normalised strings (MIRACL
+           queries; Dakshina is too large for the pairwise check and its
+           sentences are not questions, so it gets checks 1 and 4)
         3. no training query was generated from a passage judged for an
            evaluation query
+        4. no seed passage contains a Dakshina sentence
       Then rewrites the hash manifests in data/manifests/ and writes
       results/leakage_report.json.
 
@@ -47,14 +51,15 @@ def _jsonl(p: Path):
 
 
 def collect_full():
+    from hinglish_retrieval.data import dakshina
     from hinglish_retrieval.data.miracl import load_qrels
-    from hinglish_retrieval.data.rewrites import load_rows, rewrite_text
 
     sources = _jsonl(ROOT / "data/sources/sources.jsonl")
     ev: dict[str, str] = {s["source_id"]: s["text"] for s in sources}
-    for i, r in enumerate(load_rows()):
-        if r.get("type") == "rewrite" and not r.get("skipped"):
-            ev[f"rw{i}:{r['source_id']}"] = rewrite_text(r)
+    dk: dict[str, str] = {}
+    for r in dakshina.load():
+        dk[f"{r['id']}:native"] = r["native"]
+        dk[f"{r['id']}:human"] = r["human"]
 
     tr: dict[str, str] = {}
     seeds: set[str] = set()
@@ -75,7 +80,18 @@ def collect_full():
     for s in sources:
         q = (qrels if s["lang"] == "hi" else en_qrels)[s["miracl_qid"]]
         judged.update(q)
-    return ev, tr, judged, seeds
+    return ev, dk, tr, judged, seeds
+
+
+def seeds_with_dakshina(seeds: set[str]) -> list[str]:
+    if not seeds:
+        return []
+    from hinglish_retrieval.data.corpus import load_hi_full
+    from hinglish_retrieval.data.dakshina import native_keys, sentence_keys
+
+    keys = native_keys()
+    ids, texts = load_hi_full()
+    return sorted(d for d, t in zip(ids, texts) if d in seeds and sentence_keys(t) & keys)
 
 
 def main() -> None:
@@ -84,19 +100,22 @@ def main() -> None:
     args = ap.parse_args()
 
     if args.full:
-        ev, tr, judged, seeds = collect_full()
+        ev, dk, tr, judged, seeds = collect_full()
         ev_n = {k: normalise(v) for k, v in ev.items()}
+        dk_n = {k: normalise(v) for k, v in dk.items()}
         tr_n = {k: normalise(v) for k, v in tr.items()}
         ev_by = {}
-        for k, v in ev_n.items():
+        for k, v in {**ev_n, **dk_n}.items():
             ev_by.setdefault(v, k)
         exact = [(k, ev_by[v]) for k, v in tr_n.items() if v in ev_by]
         review = near_duplicates(tr_n, ev_n, threshold=0.6)
         near = [h for h in review if h[2] >= 0.8]  # fails the check
         review = [(a, b, j, tr[a], ev[b]) for a, b, j in review if j < 0.8]  # for a human to read
         seed_hits = sorted(seeds & judged)
+        seed_dk = seeds_with_dakshina(seeds)
         report = {
             "eval_texts": len(ev),
+            "dakshina_texts": len(dk),
             "train_texts": len(tr),
             "judged_passages": len(judged),
             "seed_passages": len(seeds),
@@ -108,9 +127,11 @@ def main() -> None:
             "review_0.6_to_0.8": review[:200],
             "seed_passage_overlaps": seed_hits[:50],
             "n_seed_overlaps": len(seed_hits),
+            "seeds_containing_dakshina": seed_dk[:50],
+            "n_seed_dakshina": len(seed_dk),
         }
         MAN.mkdir(parents=True, exist_ok=True)
-        FILES["eval_hashes"].write_text("\n".join(sorted({digest(v) for v in ev_n.values()})) + "\n")
+        FILES["eval_hashes"].write_text("\n".join(sorted({digest(v) for v in {**ev_n, **dk_n}.values()})) + "\n")
         FILES["train_hashes"].write_text("\n".join(sorted({digest(v) for v in tr_n.values()})) + "\n")
         FILES["judged"].write_text("\n".join(sorted(judged)) + "\n")
         FILES["seeds"].write_text("\n".join(sorted(seeds)) + ("\n" if seeds else ""))
@@ -119,7 +140,7 @@ def main() -> None:
             json.dumps(report, indent=1, ensure_ascii=False), encoding="utf-8"
         )
         print(json.dumps({k: v for k, v in report.items() if k.startswith("n_") or k.endswith("s")}, indent=1))
-        bad = report["n_exact"] or report["n_near"] or report["n_seed_overlaps"]
+        bad = report["n_exact"] or report["n_near"] or report["n_seed_overlaps"] or report["n_seed_dakshina"]
     else:
         read = {k: set(p.read_text().split()) for k, p in FILES.items()}
         e = read["eval_hashes"] & read["train_hashes"]

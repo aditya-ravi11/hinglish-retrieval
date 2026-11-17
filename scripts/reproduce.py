@@ -2,15 +2,26 @@
 
     python scripts/reproduce.py [--models bm25,me5-small,...] [--role test]
 
-Scores every baseline on every query condition that exists:
-  native      Devanagari MIRACL query
-  machine     deterministic machine romanization (one clean spelling)
-  human_w1/2  human Hinglish rewrites, writer slot 1 and 2 (only sources
-              with both slots; appears once rewrites are collected)
-  en_native / en_human_w1 / en_human_w2 for the English subset
+Two tasks; every model is scored on every query condition:
+  MIRACL Hindi retrieval (pooled hiwiki corpus, MIRACL relevance labels)
+    native      the Devanagari MIRACL question
+    machine     our deterministic machine romanization of it (one clean spelling)
+  Dakshina sentence retrieval (find the native sentence among ~10,000)
+    dk_human    the romanization a native speaker typed (Google Dakshina)
+    dk_machine  our machine romanization of the same sentence
 
-Writes results/benchmark.json (all per-query scores) and results/table.md.
-Every number in the README must come from these files.
+Models: BM25, the dense baselines, three back-transliteration pipelines
+(bt-*: Latin-script Hindi queries are turned back into Devanagari, then an
+unchanged retriever searches) and the fine-tuned models in models/. The dev
+role scores every fine-tuned model (for selection); the test role scores only
+the one named in models/SELECTED.
+
+Writes results/benchmark_<role>.json (all per-query scores) and
+results/table_<role>.md. Every number in the README must come from these files.
+
+--corpus-limit N keeps the relevant items plus N others per corpus: a quick end-to-end
+check that writes results/smoke_<role>.* instead and never touches the real
+results.
 """
 
 from __future__ import annotations
@@ -26,61 +37,85 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "src"))
 
-from hinglish_retrieval.data.corpus import load_en_hn, load_hi_pooled  # noqa: E402
+from hinglish_retrieval.data import dakshina  # noqa: E402
+from hinglish_retrieval.data.corpus import load_hi_pooled  # noqa: E402
 from hinglish_retrieval.data.miracl import load_qrels  # noqa: E402
-from hinglish_retrieval.data.rewrites import load_rows, rewrite_text, writer_slots  # noqa: E402
 from hinglish_retrieval.data.translit import machine_romanize  # noqa: E402
 from hinglish_retrieval.eval.metrics import mean, ndcg_at_k, paired_bootstrap, recall_at_k  # noqa: E402
-from hinglish_retrieval.eval.models import DENSE  # noqa: E402
+from hinglish_retrieval.eval.models import BACKTRANSLIT, DENSE, trained  # noqa: E402
 from hinglish_retrieval.eval.retrieve import BM25, Dense  # noqa: E402
 
-ALL_MODELS = ["bm25", *DENSE]
+ALL_MODELS = ["bm25", *DENSE, *BACKTRANSLIT]  # baselines; fine-tuned models are added per role
+
+
+def model_list(role: str) -> list[str]:
+    return [*ALL_MODELS, *trained(role)]
+
+
+def backtranslit_conditions(conds):
+    """The same conditions with every Latin-script query back-transliterated.
+
+    Native queries are already Devanagari and pass through unchanged.
+    """
+    from hinglish_retrieval.data.backtranslit import back_transliterate_cached, n_params
+    from hinglish_retrieval.llm import unload
+
+    out = {}
+    for c, (corp, qs) in conds.items():
+        if c != "native":
+            ids = list(qs)
+            out[c] = (corp, dict(zip(ids, back_transliterate_cached([qs[i] for i in ids]))))
+        else:
+            out[c] = (corp, qs)
+    unload()  # free the GPU for the retrievers
+    return out, n_params()
 
 
 def build_conditions(role: str):
     sources = [json.loads(l) for l in open(ROOT / "data/sources/sources.jsonl", encoding="utf-8")]
-    slots = writer_slots(load_rows())
     hi = [s for s in sources if s["lang"] == "hi" and s["role"] == role]
-    en = [s for s in sources if s["lang"] == "en"] if role == "test" else []
-
     hi_q = {**load_qrels("hi", "train"), **load_qrels("hi", "dev")}
-    conds: dict[str, tuple[str, dict[str, str]]] = {}  # name -> (corpus, {source_id: text})
+    conds: dict[str, tuple[str, dict[str, str]]] = {}  # name -> (corpus, {query_id: text})
     conds["native"] = ("hi", {s["source_id"]: s["text"] for s in hi})
     conds["machine"] = ("hi", {s["source_id"]: machine_romanize(s["text"]) for s in hi})
-    # human_w1: every source with at least one human rewrite (first writer).
-    # human_w2: sources that also have a second, different writer.
-    def human(prefix: str, group: list[dict], corpus: str) -> None:
-        for w in (0, 1):
-            have = [s for s in group if len(slots.get(s["source_id"], [])) > w]
-            if have:
-                conds[f"{prefix}human_w{w + 1}"] = (
-                    corpus,
-                    {s["source_id"]: rewrite_text(slots[s["source_id"]][w]) for s in have},
-                )
-
-    human("", hi, "hi")
-    if en:
-        conds["en_native"] = ("en", {s["source_id"]: s["text"] for s in en})
-        human("en_", en, "en")
     qrels = {s["source_id"]: hi_q[s["miracl_qid"]] for s in hi}
-    origin = {s["source_id"]: s["origin_split"] for s in hi + en}
-    return conds, qrels, en, origin
+    origin = {s["source_id"]: s["origin_split"] for s in hi}
+
+    dk = dakshina.split(role)  # the query id is the id of its own native sentence
+    conds["dk_machine"] = ("dk", {r["id"]: machine_romanize(r["native"]) for r in dk})
+    conds["dk_human"] = ("dk", {r["id"]: r["human"] for r in dk})
+    qrels.update({r["id"]: {r["id"]: 1} for r in dk})
+    return conds, qrels, origin
 
 
 def main() -> None:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--models", default=",".join(ALL_MODELS))
+    ap.add_argument("--models", help="comma-separated; default: every baseline and fine-tuned model")
     ap.add_argument("--role", default="test", choices=["test", "dev"])
+    ap.add_argument("--corpus-limit", type=int, help="smoke test: judged passages plus this many others")
     args = ap.parse_args()
-    models = args.models.split(",")
+    every = model_list(args.role)
+    models = args.models.split(",") if args.models else every
+    specs = {**DENSE, **trained(args.role if not args.models else None)}
+    unknown = [m for m in models if BACKTRANSLIT.get(m, m) not in {"bm25", *specs}]
+    if unknown:
+        sys.exit(f"unknown models: {unknown}. Known: {every}")
 
-    conds, qrels, en_sources, origin = build_conditions(args.role)
+    conds, qrels, origin = build_conditions(args.role)
     hi_ids, hi_texts = load_hi_pooled()
-    corpora = {"hi": (hi_ids, hi_texts)}
-    if en_sources:
-        en_ids, en_texts, en_q = load_en_hn()
-        corpora["en"] = (en_ids, en_texts)
-        qrels.update({s["source_id"]: en_q[s["miracl_qid"]] for s in en_sources})
+    dk_rows = dakshina.load()
+    corpora = {
+        "hi": (hi_ids, hi_texts),
+        "dk": ([r["id"] for r in dk_rows], [r["native"] for r in dk_rows]),
+    }
+    if args.corpus_limit is not None:
+        judged = {d for q in qrels.values() for d in q}
+        for name, (ids, texts) in list(corpora.items()):
+            keep = [i for i, d in enumerate(ids) if d in judged]
+            keep += [i for i, d in enumerate(ids) if d not in judged][: args.corpus_limit]
+            keep.sort()
+            corpora[name] = ([ids[i] for i in keep], [texts[i] for i in keep])
+    bt_conds, bt_params = backtranslit_conditions(conds) if any(m in BACKTRANSLIT for m in models) else (None, 0)
 
     out = {
         "generated_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
@@ -94,17 +129,22 @@ def main() -> None:
         t0 = time.time()
         res: dict = {"per_query": {}}
         dense = None
+        base = BACKTRANSLIT.get(m, m)
+        queries = bt_conds if m in BACKTRANSLIT else conds
         try:
-            if m != "bm25":
-                dense = Dense(DENSE[m])
+            if base != "bm25":
+                dense = Dense(specs[base])
                 res["params"] = dense.n_params
+            if m in BACKTRANSLIT:
+                res["params"] = res.get("params", 0) + bt_params
             for name, (ids, texts) in corpora.items():
                 if dense is None:
                     retriever = BM25(ids, texts)
                 else:
-                    dense.index(f"{name}-pooled", ids, texts)  # one index at a time
+                    tag = "pooled" if args.corpus_limit is None else f"smoke{args.corpus_limit}"
+                    dense.index(f"{name}-{tag}", ids, texts)  # one index at a time
                     retriever = dense
-                for c, (corp, qs) in conds.items():
+                for c, (corp, qs) in queries.items():
                     if corp == name:
                         res["per_query"][c] = _score(retriever.search(qs), qrels)
         except Exception as e:  # e.g. gated model without login
@@ -118,19 +158,24 @@ def main() -> None:
         print(f"{m}: done in {res['seconds']}s")
 
     (ROOT / "results").mkdir(exist_ok=True)
-    json_path = ROOT / "results" / f"benchmark_{args.role}.json"
+    smoke = args.corpus_limit is not None
+    json_path = ROOT / "results" / (f"smoke_{args.role}.json" if smoke else f"benchmark_{args.role}.json")
     # A run over a subset of models keeps the other models' rows, but only
     # when the query conditions and corpora are identical to the saved run.
-    if json_path.exists() and set(models) != set(ALL_MODELS):
+    # Rows of models that are no longer listed (e.g. a fine-tuned model that
+    # was not selected) are dropped.
+    if json_path.exists() and set(models) != set(every):
         prev = json.loads(json_path.read_text(encoding="utf-8"))
         if prev["conditions"] == out["conditions"] and prev["corpus_sizes"] == out["corpus_sizes"]:
             merged = {**prev["models"], **out["models"]}
-            out["models"] = {m: merged[m] for m in ALL_MODELS if m in merged}
+            order = every + [m for m in models if m not in every]
+            out["models"] = {m: merged[m] for m in order if m in merged}
         else:
             print("conditions changed since the saved run: rerun all models for a full table")
     json_path.write_text(json.dumps(out, indent=1, ensure_ascii=False), encoding="utf-8")
     md = render(out, origin)
-    (ROOT / "results" / f"table_{args.role}.md").write_text(md, encoding="utf-8")
+    md_name = f"smoke_{args.role}.md" if smoke else f"table_{args.role}.md"
+    (ROOT / "results" / md_name).write_text(md, encoding="utf-8")
     print(md)
 
 
@@ -139,12 +184,6 @@ def _score(run, qrels):
     nd = ndcg_at_k(run, sub, 10)
     rc = recall_at_k(run, sub, 100)
     return {q: {"ndcg10": nd[q], "recall100": rc[q]} for q in nd}
-
-
-def human_scores(nd: dict[str, dict[str, float]], prefix: str = "") -> dict[str, float]:
-    """Per query, the mean over the human writers available for it."""
-    w1, w2 = nd.get(f"{prefix}human_w1", {}), nd.get(f"{prefix}human_w2", {})
-    return {q: (v + w2[q]) / 2 if q in w2 else v for q, v in w1.items()}
 
 
 def _ci(g) -> str:
@@ -174,26 +213,23 @@ def render(out: dict, origin: dict[str, str]) -> str:
             + f" | {_ci(paired_bootstrap(nd['native'], nd['machine']))} |"
         )
 
-    if "human_w1" in conds:
-        n = out["conditions"]["human_w1"]
+    if {"dk_human", "dk_machine"} <= set(conds):
         lines += [
             "",
-            f"Human Hinglish subset: the {n} queries with at least one human rewrite. Native, machine and",
-            "human are scored on these same queries. Human = mean over the writers each query has.",
+            f"Dakshina: the same {out['conditions']['dk_human']} sentences typed by a native speaker (human) and",
+            "romanized by rule (machine); the system must find the Devanagari sentence among",
+            f"{out['corpus_sizes']['dk']}. Gap = machine minus human, 95% paired bootstrap CI.",
             "",
-            "| model | native | machine | human | gap native-human | gap machine-human |",
-            "|---|---|---|---|---|---|",
+            "| model | machine | human | gap machine-human |",
+            "|---|---|---|---|",
         ]
         for m, r in out["models"].items():
             if "error" in r:
                 continue
             nd = {c: {q: v["ndcg10"] for q, v in pq.items()} for c, pq in r["per_query"].items()}
-            hu = human_scores(nd)
-            nat = {q: nd["native"][q] for q in hu}
-            mac = {q: nd["machine"][q] for q in hu}
+            mac, hu = nd["dk_machine"], nd["dk_human"]
             lines.append(
-                f"| {m} | {100 * mean(nat):.1f} | {100 * mean(mac):.1f} | {100 * mean(hu):.1f} | "
-                f"{_ci(paired_bootstrap(nat, hu))} | {_ci(paired_bootstrap(mac, hu))} |"
+                f"| {m} | {100 * mean(mac):.1f} | {100 * mean(hu):.1f} | {_ci(paired_bootstrap(mac, hu))} |"
             )
 
     lines += ["", "Native nDCG@10 (x100) by MIRACL origin split of the query (contamination check):", ""]

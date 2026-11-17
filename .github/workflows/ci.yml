@@ -16,10 +16,5 @@ jobs:
         run: pip install -e ".[dev]"
       - name: Unit tests
         run: pytest -q
-      - uses: actions/setup-node@v4
-        with:
-          node-version: "22"
-      - name: Form assignment tests (Apps Script logic)
-        run: node --test tests/test_gas_assign.mjs tests/test_gas_code.mjs
       - name: Leakage check (committed manifests)
         run: python scripts/check_leakage.py
